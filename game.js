@@ -87,11 +87,9 @@ GameEngine.prototype.startInput = function () {
         var x = e.clientX - that.ctx.canvas.getBoundingClientRect().left;
         var y = e.clientY - that.ctx.canvas.getBoundingClientRect().top;
 
-        if (x < 1024) {
-            x = Math.floor(x / 32);
-            y = Math.floor(y / 32);
-        }
-
+        x = Math.floor(x / 40);
+        y = Math.floor(y / 40);
+ 
         return { x: x, y: y };
     }
 
@@ -193,9 +191,8 @@ Entity.prototype.rotateAndCache = function (image, angle) {
 
 // GameBoard code below
 
-function GameBoard() {
-
-    Entity.call(this, null, 0, 0);
+function GameBoard(game) {
+    Entity.call(this, game, 20, 20);
 }
 
 GameBoard.prototype = new Entity();
@@ -206,11 +203,64 @@ GameBoard.prototype.update = function () {
 }
 
 GameBoard.prototype.draw = function (ctx) {
+    ctx.drawImage(ASSET_MANAGER.getAsset("./img/960px-Blank_Go_board.png"),this.x,this.y,760,760);
+}
+
+function MouseShadow(game) {
+    this.black = true;
+    Entity.call(this, game, 0, 0);
+}
+
+MouseShadow.prototype = new Entity();
+MouseShadow.prototype.constructor = MouseShadow;
+
+MouseShadow.prototype.update = function () {
+    if (this.game.mouse) {
+        this.x = this.game.mouse.x;
+        this.y = this.game.mouse.y;
+    }
+    if (this.game.click) {
+        this.game.addEntity(new Stone(this.game, this.game.mouse.x, this.game.mouse.y, this.black));
+        this.black = !this.black;
+    }
+}
+
+MouseShadow.prototype.draw = function (ctx) {
+    ctx.globalAlpha = 0.5;
+    if (this.black) {
+        ctx.drawImage(ASSET_MANAGER.getAsset("./img/black.png"), this.x * 40 + 20, this.y * 40 + 20, 40, 40);
+    } else {
+        ctx.drawImage(ASSET_MANAGER.getAsset("./img/white.png"), this.x * 40 + 20, this.y * 40 + 20, 40, 40);
+    }
+    ctx.globalAlpha = 1.0;
+}
+
+function Stone(game, x, y, black) {
+    this.black = black;
+    Entity.call(this, game, x, y);
+}
+
+Stone.prototype = new Entity();
+Stone.prototype.constructor = Stone;
+
+Stone.prototype.update = function () {
+}
+
+Stone.prototype.draw = function (ctx) {
+    if (this.black) {
+        ctx.drawImage(ASSET_MANAGER.getAsset("./img/black.png"), this.x * 40 + 20, this.y * 40 + 20, 40, 40);
+    } else {
+        ctx.drawImage(ASSET_MANAGER.getAsset("./img/white.png"), this.x * 40 + 20, this.y * 40 + 20, 40, 40);
+    }
 }
 
 // the "main" code begins here
 
 var ASSET_MANAGER = new AssetManager();
+
+ASSET_MANAGER.queueDownload("./img/960px-Blank_Go_board.png");
+ASSET_MANAGER.queueDownload("./img/black.png");
+ASSET_MANAGER.queueDownload("./img/white.png");
 
 ASSET_MANAGER.downloadAll(function () {
     console.log("starting up da sheild");
@@ -218,9 +268,10 @@ ASSET_MANAGER.downloadAll(function () {
     var ctx = canvas.getContext('2d');
 
     var gameEngine = new GameEngine();
-    var gameboard = new GameBoard();
-
+    var gameboard = new GameBoard(gameEngine);
+    var mouseShadow = new MouseShadow(gameEngine);
     gameEngine.addEntity(gameboard);
+    gameEngine.addEntity(mouseShadow);
  
     gameEngine.init(ctx);
     gameEngine.start();
