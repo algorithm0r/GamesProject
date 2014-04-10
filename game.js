@@ -51,8 +51,10 @@ AssetManager.prototype.getAsset = function(path){
     return this.cache[path];
 }
 
-function Animation(spriteSheet, frameWidth, frameHeight, frameDuration, frames, loop, reverse) {
+function Animation(spriteSheet, startX, startY, frameWidth, frameHeight, frameDuration, frames, loop, reverse) {
     this.spriteSheet = spriteSheet;
+    this.startX = startX;
+    this.startY = startY;
     this.frameWidth = frameWidth;
     this.frameDuration = frameDuration;
     this.frameHeight = frameHeight;
@@ -75,14 +77,20 @@ Animation.prototype.drawFrame = function (tick, ctx, x, y, scaleBy) {
     }
     var index = this.reverse ? this.frames - this.currentFrame() - 1 : this.currentFrame();
     var vindex = 0;
-    while ((index+1) * this.frameWidth > this.spriteSheet.width) {
+    if ((index+1) * this.frameWidth + this.startX > this.spriteSheet.width) {
+        index -= Math.floor((this.spriteSheet.width - this.startX) / this.frameWidth);
+        vindex++;
+    }
+    while ((index + 1) * this.frameWidth > this.spriteSheet.width) {
         index -= Math.floor(this.spriteSheet.width / this.frameWidth);
         vindex++;
     }
+
     var locX = x;
     var locY = y;
+    var offset = vindex === 0 ? this.startX : 0;
     ctx.drawImage(this.spriteSheet,
-                  index * this.frameWidth, vindex*this.frameHeight,  // source from sheet
+                  index * this.frameWidth + offset, vindex*this.frameHeight + this.startY,  // source from sheet
                   this.frameWidth, this.frameHeight,
                   locX, locY,
                   this.frameWidth * scaleBy,
@@ -168,6 +176,12 @@ GameEngine.prototype.startInput = function () {
 
     this.ctx.canvas.addEventListener("mousewheel", function (e) {
         that.wheel = e;
+        e.preventDefault();
+    }, false);
+
+    this.ctx.canvas.addEventListener("keydown", function (e) {
+        if (String.fromCharCode(e.which) === ' ') that.space = true;
+        e.preventDefault();
     }, false);
 
     console.log('Input started');
@@ -212,6 +226,7 @@ GameEngine.prototype.loop = function () {
     this.clockTick = this.timer.tick();
     this.update();
     this.draw();
+    this.space = null;
     this.click = null;
     this.wheel = null;
 }
@@ -256,8 +271,6 @@ Entity.prototype.rotateAndCache = function (image, angle) {
 // GameBoard code below
 
 function Background(game) {
-    this.animation = new Animation(ASSET_MANAGER.getAsset("./img/RobotUnicorn.png"), 206, 110, 0.05, 30, true, true);
-
     Entity.call(this, game, 0, 400);
 }
 
@@ -275,7 +288,9 @@ Background.prototype.draw = function (ctx) {
 }
 
 function Unicorn(game) {
-    this.animation = new Animation(ASSET_MANAGER.getAsset("./img/RobotUnicorn.png"), 206, 110, 0.05, 30, true, true);
+    this.animation = new Animation(ASSET_MANAGER.getAsset("./img/RobotUnicorn.png"), 0, 0, 206, 110, 0.02, 30, true, true);
+    this.jumpAnimation = new Animation(ASSET_MANAGER.getAsset("./img/RobotUnicorn.png"), 618, 334, 174, 138, 0.02, 40, false, true);
+    this.jumping = false;
 
     Entity.call(this, game, 0, 400);
 }
@@ -284,11 +299,33 @@ Unicorn.prototype = new Entity();
 Unicorn.prototype.constructor = Unicorn;
 
 Unicorn.prototype.update = function () {
+    if (this.game.space) this.jumping = true;
+
     Entity.prototype.update.call(this);
 }
 
 Unicorn.prototype.draw = function (ctx) {
-    this.animation.drawFrame(this.game.clockTick, ctx, this.x, this.y);
+    if (this.jumping) {
+        var height = 0;
+        var duration = this.jumpAnimation.elapsedTime + this.game.clockTick;
+        var maxHeight = 300;
+        if (duration > this.jumpAnimation.totalTime / 2) duration = this.jumpAnimation.totalTime - duration;
+        duration = duration / this.jumpAnimation.totalTime;
+        // linear jump
+        var height = maxHeight * 2 * duration + 17;
+
+        // quadratic jump
+        height = (4 * duration - 4 * duration * duration) * maxHeight + 17;
+ 
+        this.jumpAnimation.drawFrame(this.game.clockTick, ctx, this.x + 32, this.y - height);
+        if (this.jumpAnimation.isDone()) {
+            this.jumpAnimation.elapsedTime = 0;
+            this.jumping = false;
+        }
+    }
+    else {
+        this.animation.drawFrame(this.game.clockTick, ctx, this.x, this.y);
+    }
 }
 
 // the "main" code begins here
