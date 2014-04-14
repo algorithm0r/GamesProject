@@ -84,12 +84,14 @@ GameEngine.prototype.startInput = function () {
     console.log('Starting input');
 
     var getXandY = function (e) {
-        var x = e.clientX - that.ctx.canvas.getBoundingClientRect().left;
-        var y = e.clientY - that.ctx.canvas.getBoundingClientRect().top;
+        var x = e.clientX - that.ctx.canvas.getBoundingClientRect().left - 23.5;
+        var y = e.clientY - that.ctx.canvas.getBoundingClientRect().top - 23.5;
 
-        x = Math.floor(x / 40);
-        y = Math.floor(y / 40);
+        x = Math.floor(x / 39.55);
+        y = Math.floor(y / 39.55);
  
+        if (x < 0 || x > 18 || y < 0 || y > 18) return null;
+
         return { x: x, y: y };
     }
 
@@ -193,64 +195,154 @@ Entity.prototype.rotateAndCache = function (image, angle) {
 
 function GameBoard(game) {
     Entity.call(this, game, 20, 20);
+    this.grid = false;
+    this.black = true;
+    this.board = [];
+    for (var i = 0; i < 19; i++) {
+        this.board.push([]);
+        for (var j = 0; j < 19; j++) {
+            this.board[i].push(0);
+        }
+    }
 }
 
 GameBoard.prototype = new Entity();
 GameBoard.prototype.constructor = GameBoard;
 
+GameBoard.prototype.cloneBoard = function () {
+    var b = [];
+    for (var i = 0; i < 19; i++) {
+        b.push([]);
+        for (var j = 0; j < 19; j++) {
+            b[i].push(this.board[i][j]);
+        }
+    }
+    return b;
+}
+
 GameBoard.prototype.update = function () {
+    if (this.game.click) {
+        var x = this.game.click.x;
+        var y = this.game.click.y;
+        if (this.board[x][y] === 0) {
+            var color = this.black ? 1 : 2;
+            var oldState = this.cloneBoard();
+            this.board[x][y] = color;
+            this.black = !this.black;
+
+            var that = this;
+            function checkCapture(dir) {
+                if (that.board[dir.x][dir.y] === 0) return;
+                if (that.board[dir.x][dir.y] === color) return;
+                //check for capture
+                var grp = [];
+                var libs = [];
+                that.countLiberties(dir.x, dir.y, grp, libs);
+                if (libs.length === 0) {
+                    for (var i = 0; i < grp.length; i++) {
+                        that.board[grp[i].x][grp[i].y] = 0;
+                    }
+                }
+            }
+
+            if (x - 1 >= 0) {
+                checkCapture({ x: x - 1, y: y });
+            }
+            if (y - 1 >= 0) {
+                checkCapture({ x: x, y: y - 1 });
+            }
+            if (x + 1 <= 18) {
+                checkCapture({ x: x + 1, y: y });
+            }
+            if (y + 1 <= 18) {
+                checkCapture({ x: x, y: y + 1 });
+            }
+
+            var l = [];
+            this.countLiberties(x, y, [], l);
+            if (l.length === 0) {
+                this.board = oldState;
+                this.black = !this.black;
+            }
+        }
+    }
     Entity.prototype.update.call(this);
 }
 
 GameBoard.prototype.draw = function (ctx) {
-    ctx.drawImage(ASSET_MANAGER.getAsset("./img/960px-Blank_Go_board.png"),this.x,this.y,760,760);
-}
-
-function MouseShadow(game) {
-    this.black = true;
-    Entity.call(this, game, 0, 0);
-}
-
-MouseShadow.prototype = new Entity();
-MouseShadow.prototype.constructor = MouseShadow;
-
-MouseShadow.prototype.update = function () {
-    if (this.game.mouse) {
-        this.x = this.game.mouse.x;
-        this.y = this.game.mouse.y;
+    ctx.drawImage(ASSET_MANAGER.getAsset("./img/960px-Blank_Go_board.png"), this.x, this.y, 760, 760);
+    for (var i = 0; i < 19; i++) {
+        for (var j = 0; j < 19; j++) {
+            if (this.grid) {
+                ctx.strokeStyle = "green";
+                ctx.strokeRect(23.5 + i * 39.55, 23.5 + j * 39.55, 39.55, 39.55);
+            }
+            if (this.board[i][j] === 1) {
+                //black stone
+                ctx.drawImage(ASSET_MANAGER.getAsset("./img/black.png"), i * 39.55 + 23.5, j * 39.55 + 23.5, 39.55, 39.55);
+            }
+            else if (this.board[i][j] === 2) {
+                //white stone
+                ctx.drawImage(ASSET_MANAGER.getAsset("./img/white.png"), i * 39.55 + 23.5, j * 39.55 + 23.5, 39.55, 39.55);
+            }
+       }
     }
-    if (this.game.click) {
-        this.game.addEntity(new Stone(this.game, this.game.mouse.x, this.game.mouse.y, this.black));
-        this.black = !this.black;
+
+    // draw mouse shadow
+    if (this.game.mouse && this.board[this.game.mouse.x][this.game.mouse.y] === 0) {
+        var mouse = this.game.mouse;
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        if (this.black) {
+            ctx.drawImage(ASSET_MANAGER.getAsset("./img/black.png"), mouse.x * 39.55 + 23.5, mouse.y * 39.55 + 23.5, 39.55, 39.55);
+        } else {
+            ctx.drawImage(ASSET_MANAGER.getAsset("./img/white.png"), mouse.x * 39.55 + 23.5, mouse.y * 39.55 + 23.5, 39.55, 39.55);
+        }
+        ctx.restore();
     }
 }
 
-MouseShadow.prototype.draw = function (ctx) {
-    ctx.globalAlpha = 0.5;
-    if (this.black) {
-        ctx.drawImage(ASSET_MANAGER.getAsset("./img/black.png"), this.x * 40 + 20, this.y * 40 + 20, 40, 40);
-    } else {
-        ctx.drawImage(ASSET_MANAGER.getAsset("./img/white.png"), this.x * 40 + 20, this.y * 40 + 20, 40, 40);
+GameBoard.prototype.countLiberties = function (x, y, grp, libs) {
+    var color = this.board[x][y];
+    if (color === 0) return;
+    grp.push({ x: x, y: y });
+    var that = this;
+
+    function contains(lst, itm) {
+        for (var i = 0; i < lst.length; i++) {
+            if (lst[i].x === itm.x && lst[i].y === itm.y) return true;
+        }
+        return false;
     }
-    ctx.globalAlpha = 1.0;
-}
 
-function Stone(game, x, y, black) {
-    this.black = black;
-    Entity.call(this, game, x, y);
-}
-
-Stone.prototype = new Entity();
-Stone.prototype.constructor = Stone;
-
-Stone.prototype.update = function () {
-}
-
-Stone.prototype.draw = function (ctx) {
-    if (this.black) {
-        ctx.drawImage(ASSET_MANAGER.getAsset("./img/black.png"), this.x * 40 + 20, this.y * 40 + 20, 40, 40);
-    } else {
-        ctx.drawImage(ASSET_MANAGER.getAsset("./img/white.png"), this.x * 40 + 20, this.y * 40 + 20, 40, 40);
+    function checkStone(dir) {
+        var stone = that.board[dir.x][dir.y];
+        if (stone === 0) {
+            if (!contains(libs,{ x: dir.x , y: dir.y })) {
+                libs.push({ x: dir.x, y: dir.y });
+            }
+        } else if (stone === color) {
+            if (!contains(grp,{ x: dir.x, y: dir.y })) {
+                that.countLiberties(dir.x, dir.y, grp, libs);
+            }
+        }
+    }
+    // four directions
+    // west
+    if (x - 1 >= 0) {
+        checkStone({ x: x - 1, y: y });
+    }
+    // north
+    if (y - 1 >= 0) {
+        checkStone({ x: x, y: y - 1 });
+    }
+    // east
+    if (x + 1 <= 18) {
+        checkStone({ x: x + 1, y: y });
+    }
+    // south
+    if (y + 1 <= 18) {
+        checkStone({ x: x, y: y + 1 });
     }
 }
 
@@ -269,9 +361,7 @@ ASSET_MANAGER.downloadAll(function () {
 
     var gameEngine = new GameEngine();
     var gameboard = new GameBoard(gameEngine);
-    var mouseShadow = new MouseShadow(gameEngine);
     gameEngine.addEntity(gameboard);
-    gameEngine.addEntity(mouseShadow);
  
     gameEngine.init(ctx);
     gameEngine.start();
